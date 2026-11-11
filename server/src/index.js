@@ -46,7 +46,38 @@ if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PRO
 // It also removes the X-Powered-By: Express header so we don't advertise our stack.
 app.use(helmet());
 
-app.use(cors());                              // allow cross-origin requests
+// ---------- CORS (which other websites may call this API) ----------
+// Browsers block a web page from reading responses from a different "origin"
+// (scheme + domain + port) unless the server says that origin is allowed.
+// Previously we allowed EVERY origin, meaning any website could embed calls to
+// our API in its own pages. Now only these are allowed:
+//   1. Our own site. In production the API serves the React app, so the page
+//      and API share one origin. Browsers still send an Origin header on POSTs,
+//      so we must explicitly accept it.
+//   2. Extra origins listed in CORS_ORIGINS (comma-separated) in .env, e.g.
+//      CORS_ORIGINS=https://www.northlinemotors.com,https://admin.northlinemotors.com
+//   3. Requests with no Origin header at all: server-to-server calls, curl,
+//      health checks. CORS is a browser protection; those clients ignore it anyway.
+// Disallowed origins get no CORS headers, so the browser refuses the call
+// (for JSON POSTs it fails the "preflight" check and never sends the request).
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors((req, callback) => {
+    const origin = req.get('origin');
+    let allowed = !origin || ALLOWED_ORIGINS.includes(origin);
+    if (!allowed) {
+      // Same-site check: does the Origin's host match the host this request came to?
+      try { allowed = new URL(origin).host === req.get('host'); } catch { allowed = false; }
+    }
+    // origin: true → reflect the caller's origin in Access-Control-Allow-Origin;
+    // origin: false → send no CORS headers (browser blocks it).
+    callback(null, { origin: allowed });
+  }),
+);
 app.use(express.json({ limit: '100kb' }));    // parse JSON request bodies into req.body (with a size cap)
 
 // ---------- Rate limiting ----------

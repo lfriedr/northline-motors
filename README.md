@@ -110,6 +110,7 @@ Every file has comments explaining what it does and why.
 ## Security
 
 - **Security headers (helmet):** a Content-Security-Policy that only allows scripts from this site, clickjacking protection (frame-ancestors / X-Frame-Options), HSTS, and no `X-Powered-By` header.
+- **CORS restricted:** browsers only let your own site (plus any origins in `CORS_ORIGINS`) call the API. Other websites' requests are blocked at the preflight check and never reach the server.
 - **Rate limiting (express-rate-limit):** each limit is per IP and returns `429 Too Many Requests` with a message the UI displays.
 
   | Endpoint | Limit | Why |
