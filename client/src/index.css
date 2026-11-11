@@ -1,0 +1,57 @@
+/* =============================================================================
+   Global styles
+   Tailwind v4 is configured right here in CSS (there's no tailwind.config.js).
+   ============================================================================= */
+
+/* Pulls in all of Tailwind: reset ("preflight") + every utility class. */
+@import "tailwindcss";
+
+/* Design tokens. Each --color-* here becomes usable as a class,
+   e.g. --color-ink → bg-ink, text-ink, border-ink. Change the brand in one place. */
+@theme {
+  --color-ink: #0b1b2b;          /* primary dark navy (header, buttons, headings) */
+  --color-ink-soft: #1d3247;     /* hover state for dark buttons */
+  --color-accent: #f5b301;       /* brand yellow for calls to action */
+  --color-accent-dark: #d99c00;  /* hover state for accent buttons */
+  --color-paper: #f6f7f9;        /* page background */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Removes the grey flash when tapping links on mobile Safari/Chrome. */
+html { -webkit-tap-highlight-color: transparent; }
+body { @apply bg-paper text-slate-800 antialiased; }
+
+/* -----------------------------------------------------------------------------
+   Reusable classes. Without these, every button would repeat ~10 utilities.
+   In Tailwind v4, custom classes are declared with @utility (so they can be
+   combined with modifiers like hover: or md:, and @apply'd by each other).
+   ----------------------------------------------------------------------------- */
+
+/* Base button: shared shape/spacing. The variants below build on it. */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+/* Yellow call-to-action button ("Search", "See my rate") */
+@utility btn-primary {
+  @apply btn bg-accent text-ink hover:bg-accent-dark;
+}
+/* Dark navy button for secondary-but-important actions */
+@utility btn-dark {
+  @apply btn bg-ink text-white hover:bg-ink-soft;
+}
+/* Outlined white button for low-emphasis actions ("Clear", "Back") */
+@utility btn-ghost {
+  @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+}
+/* Text inputs and selects. The focus ring keeps keyboard users oriented (accessibility). */
+@utility input {
+  @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-ink focus:ring-2 focus:ring-accent/40;
+}
+/* Small uppercase label above form fields */
+@utility label {
+  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+/* White rounded panel used all over the site */
+@utility card {
+  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+}
