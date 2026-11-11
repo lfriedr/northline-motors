@@ -33,7 +33,7 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
   if (auth) headers.Authorization = `Bearer ${dealerToken.get() ?? ''}`;
   const res = await fetch(path, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) } });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, body.error || 'Request failed', body.errors);
+  if (!res.ok) throw new ApiError(res.status, body.error || 'Request failed', body.errors ?? {});
   return body as T;
 }
 

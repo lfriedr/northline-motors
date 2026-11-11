@@ -57,7 +57,7 @@ Copy `.env.example` to `.env` to change the port, dealer password and so on.
 
 ```
 server/src/
-  index.js              ← every REST endpoint
+  index.js              ← every REST endpoint (start reading here)
   db.js                 ← database connection + table definitions
   seed.js               ← generates realistic demo inventory
   photos.js             ← placeholder car images (SVG)
@@ -106,6 +106,19 @@ Every file has comments explaining what it does and why.
 7. **Real photos:** upload to Azure Blob Storage or S3 and serve through a CDN
 8. **Swap SQLite → Postgres / Azure SQL:** the SQL is standard, so only `db.js` changes
 9. **Server-side rendering for SEO:** move pages to Next.js or React Router framework mode
+
+## Security
+
+- **Security headers (helmet):** a Content-Security-Policy that only allows scripts from this site, clickjacking protection (frame-ancestors / X-Frame-Options), HSTS, and no `X-Powered-By` header.
+- **Rate limiting (express-rate-limit):** each limit is per IP and returns `429 Too Many Requests` with a message the UI displays.
+
+  | Endpoint | Limit | Why |
+  |---|---|---|
+  | `POST /api/dealer/login` | 5 **failed** attempts / 15 min | Blocks password guessing; successful logins don't count |
+  | `POST /api/leads`, `POST /api/prequal` | 10 / 15 min | Stops form spam flooding the dealer's lead list |
+  | Everything under `/api` | 300 / min | Safety net against scrapers and runaway scripts |
+
+  Set `TRUST_PROXY=1` when deployed behind a proxy so limits use the visitor's real IP. Counts are kept in memory; with multiple server instances, use a shared store such as Redis.
 
 ## Production notes
 

@@ -10,6 +10,8 @@
 // =============================================================================
 import express from 'express'; // web framework: routing, JSON parsing, etc.
 import cors from 'cors';       // lets the browser call this API from another origin during development
+import helmet from 'helmet';   // sets security-related HTTP headers
+import rateLimit from 'express-rate-limit'; // limits how many requests one IP can make
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,8 +30,51 @@ const DEALER_TOKEN = process.env.DEALER_TOKEN || 'demo-dealer';
 seed(); // first run only — no-op if data exists
 
 const app = express();
+
+// When deployed behind a proxy/load balancer (Heroku, Render, Azure App Service),
+// the real visitor IP arrives in the X-Forwarded-For header. Without this setting,
+// every visitor would look like the proxy's IP and share ONE rate-limit bucket.
+// Set TRUST_PROXY=1 in production; leave it off locally.
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY));
+
+// ---------- Security headers (helmet) ----------
+// One line that adds ~a dozen protective headers, including:
+//   Content-Security-Policy  – browser only runs scripts/styles from our own site (blocks most XSS)
+//   X-Frame-Options          – our pages can't be embedded in another site's iframe (clickjacking)
+//   Strict-Transport-Security – browsers must use HTTPS once they've seen the site
+//   X-Content-Type-Options   – stops browsers "guessing" file types
+// It also removes the X-Powered-By: Express header so we don't advertise our stack.
+app.use(helmet());
+
 app.use(cors());                              // allow cross-origin requests
 app.use(express.json({ limit: '100kb' }));    // parse JSON request bodies into req.body (with a size cap)
+
+// ---------- Rate limiting ----------
+// Each limiter counts requests per IP address within a time window. Once the
+// limit is hit, the server answers 429 "Too Many Requests" until the window resets.
+// standardHeaders adds RateLimit-* headers so clients can see how many requests remain.
+// Note: counts are kept in memory, so they reset on restart and aren't shared
+// between multiple server instances. At scale, use a shared store such as Redis.
+const limiter = (windowMinutes, limit, error, extra = {}) =>
+  rateLimit({
+    windowMs: windowMinutes * 60 * 1000,
+    limit,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error }, // JSON body, so the React app can show it like any other error
+    ...extra,           // any per-limiter overrides
+  });
+
+// Login: very strict. Stops password-guessing (brute force) attacks.
+// skipSuccessfulRequests: only FAILED logins count, so a real dealer who signs
+// in several times a day never gets locked out — but 5 wrong guesses do.
+const loginLimiter = limiter(15, 5, 'Too many login attempts. Please wait 15 minutes and try again.', { skipSuccessfulRequests: true });
+// Form submissions (leads, pre-qual): stops spam and flooding the dealer's lead list.
+const formLimiter = limiter(15, 10, 'Too many submissions. Please wait a few minutes and try again.');
+// Everything else under /api: generous, just a safety net against scrapers and runaway scripts.
+const apiLimiter = limiter(1, 300, 'Too many requests. Please slow down.');
+
+app.use('/api', apiLimiter);
 
 // --- Small helpers for reading query-string values ---
 // "12" → 12, "" or missing → undefined
@@ -163,8 +208,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Always validate on the server, even if the browser validated too —
  * anyone can send a request directly without using the UI.
  * Responds 422 with { errors: { field: message } } so the form can show them.
+ * formLimiter runs first (Express calls middleware left to right) and rejects
+ * the request with 429 if this IP has submitted too many times.
  */
-app.post('/api/leads', (req, res) => {
+app.post('/api/leads', formLimiter, (req, res) => {
   const { vehicleId, type = 'inquiry', name, email, phone, message, meta } = req.body || {};
   const errors = {};
   if (!name || String(name).trim().length < 2) errors.name = 'Please enter your name';
@@ -182,7 +229,7 @@ app.post('/api/leads', (req, res) => {
  * Pre-qualification: validate → ask the credit provider adapter for an
  * estimate → save the outcome as a lead → return the estimate to the shopper.
  */
-app.post('/api/prequal', async (req, res) => {
+app.post('/api/prequal', formLimiter, async (req, res) => {
   const b = req.body || {};
   const errors = {};
   if (!b.firstName) errors.firstName = 'Required';
@@ -211,7 +258,7 @@ app.post('/api/prequal', async (req, res) => {
 // Every route below except /login passes through requireDealer first.
 
 /** Exchange the password for a token the client stores and sends back. */
-app.post('/api/dealer/login', (req, res) => {
+app.post('/api/dealer/login', loginLimiter, (req, res) => {
   if (req.body?.password === (process.env.DEALER_PASSWORD || 'demo')) return res.json({ token: DEALER_TOKEN });
   res.status(401).json({ error: 'Wrong password (hint: demo)' });
 });

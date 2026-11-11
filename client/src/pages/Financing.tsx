@@ -79,7 +79,9 @@ export default function Financing() {
       setResult(r);
     } catch (err) {
       // Server-side validation errors come back as { field: message }.
-      setErrors(err instanceof ApiError ? err.fields : { form: 'Something went wrong. Please try again.' });
+      // Other errors (e.g. 429 from the rate limiter) are shown as one message.
+      if (err instanceof ApiError && Object.keys(err.fields).length) setErrors(err.fields);
+      else setErrors({ form: err instanceof Error ? err.message : 'Something went wrong. Please try again.' });
     } finally {
       setSubmitting(false);
     }

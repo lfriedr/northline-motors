@@ -25,7 +25,10 @@ export default function LeadForm({ vehicleId, vehicleTitle }: { vehicleId: numbe
       await api.createLead({ ...form, type, vehicleId });
       setState('sent');
     } catch (err) {
-      setErrors(err instanceof ApiError ? err.fields : { form: 'Something went wrong' });
+      // Validation errors (422) come back per field. Anything else, such as the
+      // rate limiter's 429 "Too many submissions", is shown as one message.
+      if (err instanceof ApiError && Object.keys(err.fields).length) setErrors(err.fields);
+      else setErrors({ form: err instanceof Error ? err.message : 'Something went wrong' });
       setState('idle');
     }
   };
